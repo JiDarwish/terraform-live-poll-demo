@@ -9,6 +9,11 @@ variable "environment" {
   }
 }
 
+variable "resource_group_name" {
+  description = "The env's resource group. Created by bootstrap, only read here."
+  type        = string
+}
+
 variable "storage_account_name" {
   description = "Vote storage account. Globally unique across Azure, so it's fixed per env in tfvars."
   type        = string
@@ -29,7 +34,7 @@ variable "poll_color" {
   type        = string
 }
 
-variable "app_image_tag" {
-  description = "Git SHA of the app image to run. Built by the app-image workflow."
+variable "app_image" {
+  description = "The app image to run, pinned to a git SHA tag. Built by the app-image workflow."
   type        = string
 }

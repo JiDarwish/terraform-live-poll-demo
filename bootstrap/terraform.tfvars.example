@@ -1,3 +1,6 @@
-# Copy to terraform.tfvars (gitignored).
+# scripts/setup.sh writes terraform.tfvars (gitignored) for you. By hand: copy this file.
 subscription_id     = "" # az account show --query id -o tsv
 presenter_object_id = "" # az ad signed-in-user show --query id -o tsv
+suffix              = "" # 2-8 lowercase letters/digits, e.g. your initials + 01
+location            = "westeurope"
+github_repository   = "" # gh api repos/OWNER/REPO -q '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"'

@@ -30,7 +30,7 @@ A QR code is on the projector. The room scans it and votes from their phones, an
 | D6 | Every beat is a **one-line change typed live**. No prepared scenario branches, no fallback scripts (one exception in §7). |
 | D7 | `bootstrap/` is Terraform, run once by the presenter. Its state is migrated into the container it creates. |
 | D8 | Versions: Terraform `~> 1.16`, azurerm `~> 5.8`, the same on the laptop and in CI. |
-| D9 | Repo: `JiDarwish/terraform-live-poll-demo`, **public**. Image: `ghcr.io/jidarwish/terraform-live-poll-demo`, public package. |
+| D9 | Repo: `JiDarwish/terraform-live-poll-demo`, **public**. Image: `ghcr.io/jidarwish/terraform-live-poll-demo`, public package. Presenters **fork** it and run their own copy (M6, `SETUP.md`). |
 | D10 | **Every role assignment lives in `bootstrap/`**, including the app identities and their table role. `infra/` grants no roles, so CI needs no right to grant them. Why: Xomnia's Owner role carries a condition that blocks granting Owner, User Access Administrator and RBAC Administrator, so the presenter cannot give CI a role-granting role. Room line: *"Even Owner can't hand out Owner."* |
 
 **Out of scope:** modules (a slide), secrets in state as an act, a second team or root module, drift cron, approval gates, policy as code, HCP Terraform, Log Analytics.
@@ -64,7 +64,7 @@ terraform-live-poll-demo/
 
 | Thing | Name |
 |---|---|
-| Resource groups | `rg-livepoll-tfstate`, `rg-livepoll-dev`, `rg-livepoll-prod` |
+| Resource groups | `rg-livepoll-<suffix>-tfstate`, `rg-livepoll-<suffix>-dev`, `rg-livepoll-<suffix>-prod` |
 | State storage account / container | `stlivepolltf<suffix>` / `tfstate` |
 | State keys | `bootstrap.tfstate`, `infra-dev.tfstate`, `infra-prod.tfstate` |
 | Vote storage account / table | `stlivepoll{env}<suffix>` (in `tfvars`) / `votes` |
@@ -96,9 +96,9 @@ First run on local state, then `terraform init -migrate-state` into `tfstate/boo
 
 | Creates | Details |
 |---|---|
-| `rg-livepoll-tfstate` + state storage account + `tfstate` container | blob versioning, soft delete 7 days, `shared_access_key_enabled = false`, TLS 1.2 |
-| `rg-livepoll-dev`, `rg-livepoll-prod` | owned here, so every role below is scoped to one RG, not the subscription |
-| `id-livepoll-github` | federated credentials for `repo:JiDarwish/terraform-live-poll-demo:pull_request` and `…:ref:refs/heads/main` |
+| `rg-livepoll-<suffix>-tfstate` + state storage account + `tfstate` container | blob versioning, soft delete 7 days, `shared_access_key_enabled = false`, TLS 1.2 |
+| `rg-livepoll-<suffix>-dev`, `rg-livepoll-<suffix>-prod` | owned here, so every role below is scoped to one RG, not the subscription |
+| `id-livepoll-github` | federated credentials for `repo:<owner>@<owner_id>/<repo>@<repo_id>:pull_request` and `…:ref:refs/heads/main` (GitHub's immutable-id subject) |
 | `id-livepoll-app-dev`, `id-livepoll-app-prod` | one per env, in that env's RG. `Storage Table Data Contributor` on the env RG (the vote account doesn't exist yet). `infra/` reads them with a `data` source. |
 | CI roles | `Contributor` + `Storage Table Data Contributor` on `rg-livepoll-prod`. `Storage Blob Data Contributor` on the `tfstate` container. **No role-granting rights.** |
 | Presenter roles (`var.presenter_object_id`) | Already subscription Owner (with Xomnia's condition, D10), so only data roles: `Storage Table Data Contributor` on `rg-livepoll-dev`, `Storage Blob Data Contributor` on `tfstate`. Owner and Contributor grant no data access. |
@@ -119,9 +119,10 @@ azurerm_container_app.poll                  # identity { type = "UserAssigned" }
 Rules:
 
 - Provider block: `storage_use_azuread = true`. In azurerm 5.x the table is managed through the data plane, so with keys off Terraform must use Entra ID. One line, one sentence for the room.
-- Variables: `environment` (with a `validation` block: `dev` or `prod`), `storage_account_name`, `poll_question`, `poll_options` (`list(string)`, joined with `join("|", …)` for the app), `poll_color`, `app_image_tag`.
-- `envs/{env}.tfvars` holds the poll, the colour, the storage account name and the image tag (a git SHA, bumped by hand). Everything else is shared code.
-- Backend: partial config. `backend "azurerm" {}` + `-backend-config=envs/{env}.backend.hcl`, `use_azuread_auth = true`.
+- Variables: `environment` (with a `validation` block: `dev` or `prod`), `resource_group_name`, `storage_account_name`, `poll_question`, `poll_options` (`list(string)`, joined with `join("|", …)` for the app), `poll_color`, `app_image` (image + git SHA tag).
+- `envs/{env}.tfvars` holds the poll, the colour, the resource group and storage account names, and the image (pinned to a git SHA, bumped by hand). Everything else is shared code.
+- Backend: partial config. `backend "azurerm" { use_azuread_auth = true }` + `-backend-config=envs/{env}.backend.hcl`, which holds the state resource group, account, container and key.
+- No owner values in `.tf` files or workflows. They live in `envs/*.tfvars`, `*.backend.hcl` and the gitignored `bootstrap/terraform.tfvars`, all written by `scripts/setup.sh` (M6).
 - Outputs: `poll_url`, `results_url`.
 - The subscription comes from `ARM_SUBSCRIPTION_ID` (laptop shell and CI), never from a committed file. The location comes from the resource group.
 - `main.tf` + `variables.tf` double as the annotated slides. Together they must show a data source (the app identity from bootstrap), a cross-resource reference (the table → the storage account, the app → the identity), and the `validation` block. One-line comments, like slide callouts.

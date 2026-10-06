@@ -35,6 +35,8 @@ defaults:
 
 jobs:
   prod:
+    # PRs from someone else's fork get no Azure login, so skip them instead of failing red.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -37,6 +37,7 @@ echo "== 4/4 wait for CI to apply prod, then check it"
 sleep 10 # give GitHub a moment to register the run
 run_id=$(gh run list --workflow terraform.yml --branch main -L 1 --json databaseId -q '.[0].databaseId')
 gh run watch "$run_id" --exit-status
-fqdn=$(az containerapp show -n ca-livepoll-prod -g rg-livepoll-prod --query properties.configuration.ingress.fqdn -o tsv)
+prod_rg=$(sed -nE 's/^resource_group_name *= *"(.*)"/\1/p' infra/envs/prod.tfvars)
+fqdn=$(az containerapp show -n ca-livepoll-prod -g "$prod_rg" --query properties.configuration.ingress.fqdn -o tsv)
 curl -fsS "https://$fqdn/healthz" && echo
 echo "Done. Open https://$fqdn/results and scan the QR code with your own phone."

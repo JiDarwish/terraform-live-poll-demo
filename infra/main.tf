@@ -7,7 +7,7 @@ locals {
 
 # Data sources: read things bootstrap owns. Terraform never changes them.
 data "azurerm_resource_group" "this" {
-  name = "rg-livepoll-${var.environment}"
+  name = var.resource_group_name
 }
 
 data "azurerm_user_assigned_identity" "app" {
@@ -72,7 +72,7 @@ resource "azurerm_container_app" "poll" {
 
     container {
       name   = "poll"
-      image  = "ghcr.io/jidarwish/terraform-live-poll-demo:${var.app_image_tag}"
+      image  = var.app_image
       cpu    = 0.25
       memory = "0.5Gi"
 

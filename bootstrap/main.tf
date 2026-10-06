@@ -10,7 +10,7 @@ locals {
 # Owned here, so every role below is scoped to one resource group, not the subscription.
 
 resource "azurerm_resource_group" "tfstate" {
-  name     = "rg-livepoll-tfstate"
+  name     = "rg-livepoll-${var.suffix}-tfstate"
   location = var.location
   tags     = local.tags
 }
@@ -18,7 +18,7 @@ resource "azurerm_resource_group" "tfstate" {
 resource "azurerm_resource_group" "env" {
   for_each = toset(["dev", "prod"])
 
-  name     = "rg-livepoll-${each.key}"
+  name     = "rg-livepoll-${var.suffix}-${each.key}"
   location = var.location
   tags     = local.tags
 }
@@ -26,7 +26,7 @@ resource "azurerm_resource_group" "env" {
 # --- State storage ------------------------------------------------------------
 
 resource "azurerm_storage_account" "tfstate" {
-  name                     = "stlivepolltfjd01" # must match terraform.tf and infra/envs/*.backend.hcl
+  name                     = "stlivepolltf${var.suffix}" # must match backend.hcl and infra/envs/*.backend.hcl
   resource_group_name      = azurerm_resource_group.tfstate.name
   location                 = azurerm_resource_group.tfstate.location
   account_tier             = "Standard"
