@@ -1,0 +1,78 @@
+# The only way prod changes.
+#   PR             → plan, posted as a comment: the plan is the review
+#   push to main   → plan + apply
+#   run by hand    → plan + apply (puts prod back to what the code says, e.g. after drift)
+name: terraform
+
+on:
+  pull_request:
+    paths: ["infra/**", ".github/workflows/terraform.yml"]
+  push:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/terraform.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write      # lets the job ask GitHub for an OIDC token: the Azure login, no secrets
+  pull-requests: write # post the plan on the PR
+
+# CI's own queue on top of the state lock: one prod run at a time, never cancel a running apply.
+concurrency:
+  group: terraform-prod
+  cancel-in-progress: false
+
+env:
+  # Terraform logs in to Azure (and to the state backend) with the OIDC token.
+  ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+defaults:
+  run:
+    working-directory: infra
+
+jobs:
+  prod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.0 # the same version as the laptops
+          terraform_wrapper: false
+
+      - run: terraform fmt -check -recursive
+      - run: terraform init -input=false -backend-config=envs/prod.backend.hcl
+      - run: terraform validate
+      - run: terraform plan -input=false -var-file=envs/prod.tfvars -out=tfplan
+
+      - name: Show the plan on the run page
+        run: |
+          { echo '```'; terraform show -no-color tfplan; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post the plan on the PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          terraform show -no-color tfplan > plan.txt
+          summary=$(grep -E '^(Plan:|No changes)' plan.txt || echo 'See the full plan below.')
+          {
+            echo "### Terraform plan for prod"
+            echo "**${summary}**"
+            echo
+            echo "<details><summary>Full plan</summary>"
+            echo
+            echo '```'
+            head -c 60000 plan.txt # GitHub comments max out at 65536 characters
+            echo '```'
+            echo "</details>"
+          } > comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md --edit-last --create-if-none
+
+      - name: Apply
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: terraform apply -input=false tfplan # exactly the plan above, nothing else
