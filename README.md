@@ -70,4 +70,14 @@ terraform apply -var-file=envs/dev.tfvars
 terraform output results_url
 ```
 
-prod is never applied from a laptop. It goes through a PR and the `terraform` workflow.
+## prod through CI
+
+prod is never applied from a laptop. `.github/workflows/terraform.yml` does it:
+
+| Event | What runs |
+|---|---|
+| PR touching `infra/` | plan, posted as one PR comment (`Plan: X to add, Y to change, Z to destroy`) |
+| merge to `main` | plan + apply |
+| Actions → terraform → Run workflow | plan + apply: puts prod back to what the code says (drift) |
+
+Login is OIDC: the workflow trades a GitHub token for an Azure token as `id-livepoll-github`. No secrets are stored.
