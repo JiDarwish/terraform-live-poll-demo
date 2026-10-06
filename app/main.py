@@ -1,0 +1,195 @@
+"""Live Poll: one question, one button per option, one table entity per vote."""
+
+import hashlib
+import logging
+import os
+from collections import Counter
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+from uuid import uuid4
+
+import segno
+from azure.core.exceptions import AzureError
+from azure.data.tables import TableClient, TableServiceClient
+from azure.identity import ManagedIdentityCredential
+from fastapi import Depends, FastAPI, Form, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+HERE = Path(__file__).parent
+logger = logging.getLogger("livepoll")
+COOKIE = "voted"
+# Reads retry, 403 included, with backoff (0 s, 1 s, 2 s): new role assignments take minutes to propagate.
+RETRY = dict(retry_total=3, retry_backoff_factor=0.5, retry_on_status_codes=[403])
+
+
+@dataclass(frozen=True)
+class Settings:
+    question: str
+    options_raw: str
+    color: str
+    environment: str
+    table_name: str
+    connection_string: str
+    account_name: str
+    client_id: str
+    revision: str
+
+    @property
+    def options(self) -> list[str]:
+        return [o.strip() for o in self.options_raw.split("|") if o.strip()]
+
+    @property
+    def poll_id(self) -> str:
+        # A new question or option list is a new poll; old votes keep their own poll_id.
+        # The same question always maps to the same poll, so its votes come back with it.
+        return hashlib.sha256((self.question + self.options_raw).encode()).hexdigest()[:8]
+
+
+def _required(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"{name} must be set")
+    return value
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings(
+        question=_required("POLL_QUESTION"),
+        options_raw=_required("POLL_OPTIONS"),
+        color=os.environ.get("POLL_COLOR", "#2f7d5b"),
+        environment=os.environ.get("ENVIRONMENT", "dev"),
+        table_name=os.environ.get("TABLE_NAME", "votes"),
+        connection_string=os.environ.get("STORAGE_CONNECTION_STRING", ""),
+        account_name=os.environ.get("STORAGE_ACCOUNT_NAME", ""),
+        client_id=os.environ.get("AZURE_CLIENT_ID", ""),
+        # Container Apps sets this per revision; `or` also turns an empty value into "local".
+        revision=os.environ.get("CONTAINER_APP_REVISION") or "local",
+    )
+
+
+@lru_cache
+def get_table(settings: Settings = Depends(get_settings)) -> TableClient:
+    # The app never creates the table: Terraform (or compose's table-init) owns it.
+    # A connection string is only for local runs against Azurite. In Azure: managed identity, no keys.
+    if settings.connection_string:
+        service = TableServiceClient.from_connection_string(settings.connection_string, **RETRY)
+    else:
+        endpoint = f"https://{settings.account_name}.table.core.windows.net"
+        credential = ManagedIdentityCredential(client_id=settings.client_id)
+        service = TableServiceClient(endpoint, credential=credential, **RETRY)
+    return service.get_table_client(settings.table_name)
+
+
+def log_store_down(exc: Exception) -> None:
+    # One line, no traceback: the projector polls every 2 s and the cause must stay readable.
+    logger.error("vote store unreachable: %s: %s", type(exc).__name__, exc)
+
+
+def count_votes(settings: Settings, table: TableClient) -> Counter:
+    rows = table.query_entities("PartitionKey eq @pk", parameters={"pk": settings.poll_id}, select=["option"])
+    return Counter(row["option"] for row in rows)
+
+
+def qr_svg(url: str) -> str:
+    # Inline SVG with no fixed size so CSS sizes it. border=4 is the standard quiet zone.
+    # No title/desc: the URL comes from the untrusted Host header and must not land in markup.
+    return segno.make_qr(url, error="m").svg_inline(scale=10, border=4, dark="#000", light="#fff", omitsize=True)
+
+
+app = FastAPI(title="Live Poll")
+app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+templates = Jinja2Templates(directory=HERE / "templates")
+
+
+def page_context(settings: Settings) -> dict:
+    return {k: getattr(settings, k) for k in ("question", "options", "color", "environment")}
+
+
+def render_vote_page(request: Request, settings: Settings, store_down: bool = False, status_code: int = 200):
+    voted = request.cookies.get(COOKIE) == settings.poll_id
+    context = {**page_context(settings), "voted": voted, "store_down": store_down}
+    return templates.TemplateResponse(request, "vote.html", context, status_code=status_code)
+
+
+@app.get("/", response_class=HTMLResponse)
+def vote_page(
+    request: Request, settings: Settings = Depends(get_settings), table: TableClient = Depends(get_table)
+):
+    # Reads the store so a phone sees the banner before it taps; the page still renders (200).
+    try:
+        count_votes(settings, table)
+    except AzureError as exc:
+        log_store_down(exc)
+        return render_vote_page(request, settings, store_down=True)
+    return render_vote_page(request, settings)
+
+
+@app.get("/results", response_class=HTMLResponse)
+def results_page(request: Request, settings: Settings = Depends(get_settings)):
+    # Never touches storage: results.js fetches the counts from /api/results.
+    # The QR points at the host the projector used, so the app never needs its own FQDN.
+    vote_url = str(request.url_for("vote_page"))
+    return templates.TemplateResponse(
+        request,
+        "results.html",
+        {
+            **page_context(settings),
+            "revision": settings.revision,
+            "poll_id": settings.poll_id,
+            "vote_url": vote_url,
+            "qr": qr_svg(vote_url),
+        },
+    )
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+@app.post("/api/vote")
+def vote(
+    request: Request,
+    option: str = Form(),
+    settings: Settings = Depends(get_settings),
+    table: TableClient = Depends(get_table),
+):
+    poll_id = settings.poll_id
+    if request.cookies.get(COOKIE) == poll_id:
+        return JSONResponse({"error": "already voted"}, status_code=409)
+    if option not in settings.options:
+        return JSONResponse({"error": "unknown option"}, status_code=400)
+    try:
+        table.create_entity({"PartitionKey": poll_id, "RowKey": str(uuid4()), "option": option})
+    except AzureError as exc:
+        log_store_down(exc)
+        if "text/html" in request.headers.get("accept", ""):
+            # A phone's form post gets the page back with a banner; API clients keep the JSON.
+            return render_vote_page(request, settings, store_down=True, status_code=503)
+        return JSONResponse({"error": "vote store unreachable"}, status_code=503)
+    response = RedirectResponse("/", status_code=303)
+    # Soft guard against double voting, not real security. No Secure flag: local runs are plain HTTP.
+    response.set_cookie(COOKIE, poll_id, max_age=86400, httponly=True, samesite="lax", path="/")
+    return response
+
+
+@app.get("/api/results")
+def results(settings: Settings = Depends(get_settings), table: TableClient = Depends(get_table)):
+    try:
+        counts = count_votes(settings, table)
+    except AzureError as exc:
+        log_store_down(exc)
+        return JSONResponse({"error": "vote store unreachable"}, status_code=503)
+    return {
+        "poll_id": settings.poll_id,
+        "question": settings.question,
+        "environment": settings.environment,
+        "options": [{"option": o, "count": counts[o]} for o in settings.options],
+        "total": sum(counts[o] for o in settings.options),
+        # Lets an open /results tab notice a new revision and reload its footer.
+        "revision": settings.revision,
+    }

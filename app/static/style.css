@@ -1,0 +1,162 @@
+:root {
+  --accent: #2f7d5b;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #fafafa;
+  color: #1a1a1a;
+  border-top: 8px solid var(--accent);
+}
+
+main {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+h1 {
+  font-size: 2rem;
+  line-height: 1.2;
+  margin: 1rem 0 1.5rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.3rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  color: #fff;
+  background: #666;
+}
+
+.badge-dev { background: #e07b00; }
+.badge-prod { background: #2e8b3e; }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+button {
+  font-size: 1.3rem;
+  padding: 1.1rem 1rem;
+  border: none;
+  border-radius: 0.6rem;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:active { filter: brightness(0.85); }
+
+.banner {
+  padding: 0.75rem 1rem;
+  border-radius: 0.4rem;
+  background: #fde8e8;
+  color: #9b1c1c;
+  font-weight: 600;
+}
+
+.thanks {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+a { color: var(--accent); }
+
+/* --- projector results page: read from the back of the room -------------- */
+
+.results-page main {
+  max-width: none;
+  padding: 2rem 3vw;
+}
+
+.results-page h1 { font-size: clamp(2.5rem, 4vw, 5rem); }
+
+.results-page .badge { font-size: 1.25rem; }
+
+.results-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4vw;
+  align-items: start;
+}
+
+.bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Labels and counts sit beside the bar, never on it: POLL_COLOR can be any colour. */
+.bars li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem 1.5rem;
+  align-items: center;
+  font-size: clamp(1.5rem, 2.5vw, 3rem);
+  font-weight: 600;
+}
+
+.bars .track {
+  grid-column: 1;
+  height: clamp(1.5rem, 3vh, 3rem);
+  background: #e4e4e4;
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.bars .bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  /* Dark edge keeps a light POLL_COLOR visible against the light track. */
+  box-shadow: inset 0 0 0 3px #111;
+  transition: width 0.4s;
+}
+
+.bars .count {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 3ch;
+  text-align: right;
+  font-size: 1.3em;
+  font-variant-numeric: tabular-nums;
+}
+
+.results-page .total {
+  font-size: clamp(2rem, 3.5vw, 4rem);
+  font-weight: 700;
+  margin: 2rem 0 0;
+}
+
+.qr { text-align: center; }
+
+.qr svg {
+  display: block;
+  width: min(40vh, 30vw);
+  height: auto;
+}
+
+.vote-url {
+  font-size: 1.25rem;
+  color: #444;
+  word-break: break-all;
+  max-width: min(40vh, 30vw);
+}
+
+.results-page footer {
+  margin-top: 2rem;
+  font-size: 1.25rem;
+  color: #444;
+}
