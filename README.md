@@ -3,7 +3,7 @@
 A QR code on the projector, the room votes from their phones, and Terraform controls the question, the options and the vote store. Every Terraform change shows up on 20 phones.
 
 - **What and why:** [SPEC.md](SPEC.md)
-- **How to present it:** `RUNBOOK.md` (coming in M5)
+- **How to present it, and how to reset:** [RUNBOOK.md](RUNBOOK.md)
 
 ## Run the app locally
 

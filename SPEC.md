@@ -147,7 +147,7 @@ Rules:
 
 ## 7. The session: 5 beats
 
-**Starting state:** bootstrap applied. prod deployed by CI the day before. dev empty. Laptop `init`ed against the dev backend. `main` == tag `session-start`. Tabs: prod `/results`, the repo, the portal.
+**Starting state:** bootstrap applied. prod deployed by CI the day before. dev empty. Laptop `init`ed against the dev backend. `infra/` on `main` matches tag `session-start`. Tabs: prod `/results`, the repo, the portal.
 
 | # | Beat | Where | Do | The room sees |
 |---|---|---|---|---|
@@ -172,12 +172,11 @@ Both routes are documented in `RUNBOOK.md`. Run the day before.
 
 **A. Script (`scripts/reset.sh`), fast:**
 
-1. `git checkout session-start`, then `terraform -chdir=infra destroy -var-file=envs/dev.tfvars`. This runs from the tag because `main` may carry `prevent_destroy`.
-2. `git push --force origin session-start:main`.
-3. `gh workflow run terraform.yml --ref main`. prod goes back to the starting question.
-4. Close leftover PRs. `curl -fsS <prod>/healthz`, and scan the QR yourself.
+1. Restore `infra/` from the `session-start` tag as a normal commit on `main` and push. CI applies prod back to the starting question. No force-push: history is kept, and changes outside `infra/` are never lost.
+2. `terraform destroy` dev with the restored code, which has no `prevent_destroy`.
+3. Close leftover PRs. Wait for the CI run, then `curl -fsS <prod>/healthz`, and scan the QR yourself.
 
-**B. Through PRs, the "proper" way:** open a PR that reverts the session's commits on `main`. Read the plan, merge, and let CI apply. Destroy dev from the laptop as in A.1.
+**B. Through a PR, the "proper" way:** the same `git restore` on a branch, a PR, read the plan, merge. Destroy dev from the laptop as in A.2.
 
 ---
 
