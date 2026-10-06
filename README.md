@@ -28,7 +28,7 @@ pytest app/tests
 |---|---|
 | `app/` | the poll (FastAPI, Azure Table Storage) |
 | `bootstrap/` | run once: state storage, resource groups, identities, every role assignment |
-| `infra/` | the Terraform the room reads, for dev and prod (M3) |
+| `infra/` | the Terraform the room reads, for dev and prod |
 
 ## Bootstrap (run once)
 
@@ -58,3 +58,16 @@ gh variable set AZURE_SUBSCRIPTION_ID --repo $REPO --body "$(terraform output -r
 ```
 
 Later changes: `cd bootstrap && terraform init && terraform apply`. The state is remote from then on.
+
+## Dev from the laptop
+
+```sh
+cd infra
+export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+terraform init -backend-config=envs/dev.backend.hcl
+terraform plan -var-file=envs/dev.tfvars
+terraform apply -var-file=envs/dev.tfvars
+terraform output results_url
+```
+
+prod is never applied from a laptop. It goes through a PR and the `terraform` workflow.

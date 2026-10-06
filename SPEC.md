@@ -119,11 +119,12 @@ azurerm_container_app.poll                  # identity { type = "UserAssigned" }
 Rules:
 
 - Provider block: `storage_use_azuread = true`. In azurerm 5.x the table is managed through the data plane, so with keys off Terraform must use Entra ID. One line, one sentence for the room.
-- Variables: `environment` (with a `validation` block: `dev` or `prod`), `location`, `storage_account_name`, `poll_question`, `poll_options` (`list(string)`, joined with `join("|", …)` for the app), `poll_color`, `app_image_tag`.
+- Variables: `environment` (with a `validation` block: `dev` or `prod`), `storage_account_name`, `poll_question`, `poll_options` (`list(string)`, joined with `join("|", …)` for the app), `poll_color`, `app_image_tag`.
 - `envs/{env}.tfvars` holds the poll, the colour, the storage account name and the image tag (a git SHA, bumped by hand). Everything else is shared code.
 - Backend: partial config. `backend "azurerm" {}` + `-backend-config=envs/{env}.backend.hcl`, `use_azuread_auth = true`.
 - Outputs: `poll_url`, `results_url`.
-- `main.tf` doubles as the annotated slide. It must show a data source (the app identity from bootstrap), a cross-resource reference (the table → the storage account, the app → the identity), and the `validation` block. One-line comments, like slide callouts.
+- The subscription comes from `ARM_SUBSCRIPTION_ID` (laptop shell and CI), never from a committed file. The location comes from the resource group.
+- `main.tf` + `variables.tf` double as the annotated slides. Together they must show a data source (the app identity from bootstrap), a cross-resource reference (the table → the storage account, the app → the identity), and the `validation` block. One-line comments, like slide callouts.
 
 ---
 
