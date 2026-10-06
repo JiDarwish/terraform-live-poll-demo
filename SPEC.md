@@ -198,6 +198,7 @@ Both routes are documented in `RUNBOOK.md`. Run the day before.
 | M3 | infra on dev | Apply from the laptop → working dev URL, votes stored via managed identity |
 | M4 | CI + prod | A PR shows a plan comment. Merge → prod URL works. `workflow_dispatch` reverts a portal edit. |
 | M5 | Runbook + reset | `RUNBOOK.md` covers all 5 beats. Both reset routes return to the starting state. |
-| M6 | Rehearsal | One full run alone, from reset to Beat 5, timed |
+| M6 | Portable repo | Anyone can run it on their own Azure + GitHub: see [docs/m6-portable-spec.md](docs/m6-portable-spec.md) |
+| M7 | Rehearsal | One full run alone, from reset to Beat 5, timed |
 
 **Definition of done:** the presenter runs one full rehearsal alone, from reset to Beat 5, without help.
