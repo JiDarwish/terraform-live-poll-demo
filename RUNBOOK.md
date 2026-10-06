@@ -6,6 +6,8 @@
 
 Each step reads: ▶ **do** · 👀 **the room sees** · 🗣 **say**.
 
+`<s>` = your suffix, from `bootstrap/terraform.tfvars` (e.g. `jd01`).
+
 ---
 
 ## At a glance
@@ -34,7 +36,7 @@ The clock counts demo minutes only. Slides in between come on top.
 **Terminals**
 
 - [ ] `az login`, then `az account show --query name` → shows your subscription
-- [ ] `gh auth status` → shows JiDarwish
+- [ ] `gh auth status` → your account. `gh repo set-default --view` → **your fork**, not the original
 - [ ] Open terminals **A** and **B**, both in `infra/`, with a big font. In both:
   ```sh
   export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
@@ -50,7 +52,7 @@ The clock counts demo minutes only. Slides in between come on top.
 
 1. prod `/results`
 2. repo → Actions
-3. portal → `stlivepolltfjd01` → `tfstate` container
+3. portal → `stlivepolltf<s>` → `tfstate` container
 4. portal → `ca-livepoll-prod`
 
 - [ ] **1 min before the teaser:** reload prod `/results`. The app scales to zero, and the first request takes 10–20 s.
@@ -82,7 +84,7 @@ The clock counts demo minutes only. Slides in between come on top.
    👀 `4 to add`\
    🗣 Read it out loud. Count the `+`. Ask: "What will happen?"
 4. ▶ `terraform apply -var-file=envs/dev.tfvars` → `yes`\
-   👀 portal → `rg-livepoll-dev` fills up while it waits\
+   👀 portal → `rg-livepoll-<s>-dev` fills up while it waits\
    🗣 "The Container Apps environment is the slow one."
 5. ▶ `terraform output results_url` → open it\
    👀 orange **DEV** badge, a different question\
@@ -104,7 +106,7 @@ The clock counts demo minutes only. Slides in between come on top.
 
 ### 2a · Where state lives (portal)
 
-1. ▶ `stlivepolltfjd01` → `tfstate` → `infra-dev.tfstate`\
+1. ▶ `stlivepolltf<s>` → `tfstate` → `infra-dev.tfstate`\
    🗣 "The same JSON as a local `terraform.tfstate`. But it's shared, versioned, and only some people can read it."
 2. ▶ Data protection (versioning, soft delete), then Configuration (account key access **disabled**)\
    🗣 "No keys. You need an Entra ID role to read it."
@@ -246,7 +248,7 @@ This works because PR checks run on the PR merged with the current `main`, which
 **Fallback if the portal is slow** (replaces step 1):
 
 ```sh
-az containerapp update -n ca-livepoll-prod -g rg-livepoll-prod --set-env-vars POLL_QUESTION="Is Terraform overrated?"
+az containerapp update -n ca-livepoll-prod -g rg-livepoll-<s>-prod --set-env-vars POLL_QUESTION="Is Terraform overrated?"
 ```
 
 **If it breaks**

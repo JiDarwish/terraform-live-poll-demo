@@ -8,13 +8,10 @@ terraform {
     }
   }
 
-  # Remote state, partial config: where state lives is shared, the file name (key) comes per env.
+  # Remote state, partial config: where the state file lives comes per env from envs/{env}.backend.hcl.
   #   terraform init -backend-config=envs/dev.backend.hcl
   backend "azurerm" {
-    resource_group_name  = "rg-livepoll-tfstate"
-    storage_account_name = "stlivepolltfjd01"
-    container_name       = "tfstate"
-    use_azuread_auth     = true # log in with Entra ID: the state account has no keys
+    use_azuread_auth = true # log in with Entra ID: the state account has no keys
   }
 }
 
