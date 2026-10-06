@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars (gitignored).
+subscription_id     = "" # az account show --query id -o tsv
+presenter_object_id = "" # az ad signed-in-user show --query id -o tsv

@@ -1,6 +1,6 @@
 # Live Poll v3: a Terraform demo you can vote on
 
-**Status:** draft for review, 2026-10-06
+**Status:** approved 2026-10-06. Updated the same day: all role assignments live in `bootstrap/` (D10).
 **Replaces:** `JiDarwish/terraform-live-poll` (v2). That repo stays as a reference until v3 works end to end, then it is archived.
 **Presenter:** one person, alone. They run bootstrap, own the subscription and present every beat.
 
@@ -25,12 +25,13 @@ A QR code is on the projector. The room scans it and votes from their phones, an
 | D1 | The app is reused from v2 (`app/`), with small trims (§4). |
 | D2 | Azure, on the presenter's Xomnia subscription. Container Apps for the app, a Storage Table for the votes. |
 | D3 | Two environments, **dev** and **prod**, from **one root module**. Separate `tfvars` and backend files per env. |
-| D4 | The app reaches storage with a **user-assigned managed identity**. `shared_access_key_enabled = false`. No keys or secrets anywhere. |
+| D4 | The app reaches storage with a **user-assigned managed identity**, created in `bootstrap/` (D10). `shared_access_key_enabled = false`. No keys or secrets anywhere. |
 | D5 | **One Terraform workflow**: plan on PR (as a comment), apply on push to `main` and on `workflow_dispatch`. OIDC login. No approval gate. |
 | D6 | Every beat is a **one-line change typed live**. No prepared scenario branches, no fallback scripts (one exception in §7). |
 | D7 | `bootstrap/` is Terraform, run once by the presenter. Its state is migrated into the container it creates. |
 | D8 | Versions: Terraform `~> 1.16`, azurerm `~> 5.8`, the same on the laptop and in CI. |
 | D9 | Repo: `JiDarwish/terraform-live-poll-demo`, **public**. Image: `ghcr.io/jidarwish/terraform-live-poll-demo`, public package. |
+| D10 | **Every role assignment lives in `bootstrap/`**, including the app identities and their table role. `infra/` grants no roles, so CI needs no right to grant them. Why: Xomnia's Owner role carries a condition that blocks granting Owner, User Access Administrator and RBAC Administrator, so the presenter cannot give CI a role-granting role. Room line: *"Even Owner can't hand out Owner."* |
 
 **Out of scope:** modules (a slide), secrets in state as an act, a second team or root module, drift cron, approval gates, policy as code, HCP Terraform, Log Analytics.
 
@@ -44,7 +45,7 @@ terraform-live-poll-demo/
 ├── SPEC.md                    # this file
 ├── RUNBOOK.md                 # the presenter's step tables, one per beat
 ├── app/                       # copied from v2, trimmed (§4)
-├── bootstrap/                 # run once: state storage, RGs, CI identity, roles (§5.1)
+├── bootstrap/                 # run once: state storage, RGs, identities, every role (§5.1)
 ├── infra/                     # the root module for dev and prod (§5.2)
 │   ├── terraform.tf           # required_version, required_providers, backend "azurerm" {}
 │   ├── main.tf
@@ -80,7 +81,7 @@ Trims:
 
 1. **Remove `AUTH_MODE`.** If `STORAGE_CONNECTION_STRING` is set, use it (local Azurite only). Otherwise use `ManagedIdentityCredential(client_id=AZURE_CLIENT_ID)` against `https://{STORAGE_ACCOUNT_NAME}.table.core.windows.net`.
 2. **Footer** shows `env · revision`. The auth label goes.
-3. **Keep** the 403 retry with backoff and the "Can't reach the vote store" banner. Beat 1 creates the role assignment live, and propagation can lag the app by minutes.
+3. **Keep** the 403 retry with backoff and the "Can't reach the vote store" banner. The app's role is granted by bootstrap long before Beat 1, so this is a safety net, not the plan.
 4. Update tests to match. `docker compose up` still runs the app against Azurite.
 
 Env vars set by Terraform: `POLL_QUESTION`, `POLL_OPTIONS` (pipe-separated), `POLL_COLOR`, `ENVIRONMENT`, `STORAGE_ACCOUNT_NAME`, `TABLE_NAME`, `AZURE_CLIENT_ID`.
@@ -98,8 +99,9 @@ First run on local state, then `terraform init -migrate-state` into `tfstate/boo
 | `rg-livepoll-tfstate` + state storage account + `tfstate` container | blob versioning, soft delete 7 days, `shared_access_key_enabled = false`, TLS 1.2 |
 | `rg-livepoll-dev`, `rg-livepoll-prod` | owned here, so every role below is scoped to one RG, not the subscription |
 | `id-livepoll-github` | federated credentials for `repo:JiDarwish/terraform-live-poll-demo:pull_request` and `…:ref:refs/heads/main` |
-| CI roles | `Contributor` + `Storage Table Data Contributor` on `rg-livepoll-prod`. `Role Based Access Control Administrator` on `rg-livepoll-prod`, **with a condition: it may only assign `Storage Table Data Contributor`**. `Storage Blob Data Contributor` on the `tfstate` container. |
-| Presenter roles (`var.presenter_object_id`) | `Owner` + `Storage Table Data Contributor` on `rg-livepoll-dev`. `Contributor` on `rg-livepoll-prod` (needed for the drift beat, and itself a talking point). `Storage Blob Data Contributor` on `tfstate`. |
+| `id-livepoll-app-dev`, `id-livepoll-app-prod` | one per env, in that env's RG. `Storage Table Data Contributor` on the env RG (the vote account doesn't exist yet). `infra/` reads them with a `data` source. |
+| CI roles | `Contributor` + `Storage Table Data Contributor` on `rg-livepoll-prod`. `Storage Blob Data Contributor` on the `tfstate` container. **No role-granting rights.** |
+| Presenter roles (`var.presenter_object_id`) | Already subscription Owner (with Xomnia's condition, D10), so only data roles: `Storage Table Data Contributor` on `rg-livepoll-dev`, `Storage Blob Data Contributor` on `tfstate`. Owner and Contributor grant no data access. |
 
 No GitHub provider. After apply, set three Actions variables once: `gh variable set AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID`.
 
@@ -107,10 +109,9 @@ No GitHub provider. After apply, set three Actions variables once: `gh variable 
 
 ```
 data.azurerm_resource_group.this            # owned by bootstrap
+data.azurerm_user_assigned_identity.app     # owned by bootstrap, role already granted
 azurerm_storage_account.votes               # shared_access_key_enabled = false
 azurerm_storage_table.votes                 # "votes", storage_account_id = ...
-azurerm_user_assigned_identity.app
-azurerm_role_assignment.app_table           # Storage Table Data Contributor → the vote account
 azurerm_container_app_environment.this
 azurerm_container_app.poll                  # identity { type = "UserAssigned" }, min_replicas = 0
 ```
@@ -122,7 +123,7 @@ Rules:
 - `envs/{env}.tfvars` holds the poll, the colour, the storage account name and the image tag (a git SHA, bumped by hand). Everything else is shared code.
 - Backend: partial config. `backend "azurerm" {}` + `-backend-config=envs/{env}.backend.hcl`, `use_azuread_auth = true`.
 - Outputs: `poll_url`, `results_url`.
-- `main.tf` doubles as the annotated slide. It must show a data source, a cross-resource reference (the role assignment), and the `validation` block. One-line comments, like slide callouts.
+- `main.tf` doubles as the annotated slide. It must show a data source (the app identity from bootstrap), a cross-resource reference (the table → the storage account, the app → the identity), and the `validation` block. One-line comments, like slide callouts.
 
 ---
 
@@ -159,7 +160,7 @@ Rules:
 Notes:
 
 - Beat 2: with the default `-lock-timeout=0s` the second command **fails at once**. It does not wait. Say this correctly. Name `force-unlock` as the dangerous escape hatch.
-- Beat 5: *"Why can I even do this? I have Contributor on prod. Real fix: nobody but CI has write on prod."* Fallback if the portal is slow: `az containerapp update -n ca-livepoll-prod -g rg-livepoll-prod --set-env-vars POLL_QUESTION="Is Terraform overrated?"`.
+- Beat 5: *"Why can I even do this? I'm subscription Owner. Real fix: nobody but CI has write on prod."* Fallback if the portal is slow: `az containerapp update -n ca-livepoll-prod -g rg-livepoll-prod --set-env-vars POLL_QUESTION="Is Terraform overrated?"`.
 - Rehearsal rule: if Beat 1's apply takes over 5 min, start it before the slide that comes before it.
 
 ---
@@ -182,10 +183,9 @@ Both routes are documented in `RUNBOOK.md`. Run the day before.
 ## 9. To verify during implementation
 
 1. Renaming `azurerm_storage_table` forces replacement in 5.8 (Beat 4 depends on it).
-2. The syntax of the role-assignment condition that limits RBAC Administrator to one role.
-3. The azurerm backend and provider pick up `ARM_USE_OIDC` in CI without `azure/login`.
-4. Container Apps environment creation time (the Beat 1 rehearsal rule).
-5. Role propagation for the app identity on first deploy: how long the banner shows.
+2. The azurerm backend and provider pick up `ARM_USE_OIDC` in CI without `azure/login`.
+3. Container Apps environment creation time (the Beat 1 rehearsal rule).
+4. The app gets a token for its identity on the first request after deploy (the banner should not show).
 
 ---
 
