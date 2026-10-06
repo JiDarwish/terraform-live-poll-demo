@@ -15,7 +15,10 @@ variable "presenter_object_id" {
 }
 
 variable "github_repository" {
-  description = "The repo whose workflows may log in as the CI identity."
+  description = "The repo whose workflows may log in as the CI identity, as GitHub writes it in the OIDC subject."
   type        = string
-  default     = "JiDarwish/terraform-live-poll-demo"
+  # GitHub puts immutable ids in the subject: owner@owner_id/repo@repo_id. A deleted and
+  # re-created repo with the same name gets a new id, so its tokens no longer match. Look it up with:
+  #   gh api repos/JiDarwish/terraform-live-poll-demo -q '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"'
+  default = "JiDarwish@29838474/terraform-live-poll-demo@1407041292"
 }
