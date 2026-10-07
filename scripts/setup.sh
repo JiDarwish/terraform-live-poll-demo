@@ -89,7 +89,7 @@ echo "== 6/6 Next steps"
 cat <<EOF
 
 Config written. Review it with:  git diff
-Then continue with SETUP.md, step 4 (bootstrap). In short:
+Then continue with SETUP.md, step 3 (bootstrap). In short:
 
   cd bootstrap
   printf 'terraform {\n  backend "local" {}\n}\n' > local_override.tf
