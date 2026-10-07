@@ -70,14 +70,13 @@ cd bootstrap
 # 1. First run keeps state on your laptop: the state container doesn't exist yet.
 printf 'terraform {\n  backend "local" {}\n}\n' > local_override.tf
 terraform init
-terraform plan -out=tfplan        # expect: 17 to add
-terraform apply tfplan
+terraform apply                   # expect: 17 to add, then answer: yes
 
 # 2. Move the state into the container you just created.
 rm local_override.tf
 terraform init -migrate-state -backend-config=backend.hcl   # answer: yes
 terraform plan                    # expect: No changes
-rm terraform.tfstate terraform.tfstate.backup tfplan
+rm terraform.tfstate terraform.tfstate.backup
 ```
 
 A 403 on `migrate-state` means your new blob role hasn't propagated yet. Wait 2–5 min and run it again.
