@@ -1,4 +1,5 @@
 # Local run: the app against Azurite (Azure's storage emulator), via a connection string.
+# Local only: dev, prod and CI never use Azurite or this file.
 #   docker compose up
 #   POLL_QUESTION="Other?" docker compose up -d app   # a new poll, starting at zero
 

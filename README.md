@@ -9,6 +9,8 @@ A QR code on the projector, the room votes from their phones, and Terraform cont
 
 ## Run the app locally
 
+Azurite stands in for Azure Table Storage, so you need no Azure account. It is for local runs only: dev, prod and CI never use it. In Azure, the app uses a real storage account with managed identity, no keys.
+
 ```sh
 cd app
 docker compose up          # the app + Azurite (Azure's storage emulator)
